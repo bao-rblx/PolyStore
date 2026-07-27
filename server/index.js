@@ -308,6 +308,22 @@ function initDb() {
     console.log(`[polystore-api] Enforced password and admin role for: ${adminEmail}`);
   }
 
+  // Seed a demo customer so the "customer" role login always exists after a
+  // redeploy (Render's SQLite is ephemeral). Credentials are overridable via env.
+  const customerEmail = (process.env.CUSTOMER_EMAIL || 'customer@polystore.com').trim().toLowerCase();
+  const customerPass = process.env.CUSTOMER_PASSWORD || 'customer123';
+  const customerHash = bcrypt.hashSync(customerPass, 10);
+  const customerExists = db.prepare('SELECT id FROM users WHERE email = ?').get(customerEmail);
+  if (!customerExists) {
+    db.prepare(
+      `INSERT INTO users (email, password_hash, name, student_id, role) VALUES (?,?,?,?, 'user')`,
+    ).run(customerEmail, customerHash, 'Demo Customer', '000001');
+    console.log(`[polystore-api] Seeded demo customer: ${customerEmail} / password: ${customerPass}`);
+  } else {
+    db.prepare(`UPDATE users SET password_hash = ?, role = 'user' WHERE email = ?`).run(customerHash, customerEmail);
+    console.log(`[polystore-api] Enforced password and user role for: ${customerEmail}`);
+  }
+
   // Seed initial coupons if empty or missing POLY100
   const poly100Exists = db.prepare(`SELECT code FROM coupons WHERE code = 'POLY100'`).get();
   if (!poly100Exists) {
